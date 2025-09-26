@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   lfs261:
     driver: bridge
