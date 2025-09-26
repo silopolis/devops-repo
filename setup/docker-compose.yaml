@@ -46,3 +46,17 @@ services:
       - jenkins-docker-certs:/certs/client
       - jenkins-data:/var/jenkins_home
 
+  tunnel:
+    # TODO Automatically configure System>Jenkins Location>Jenkins URL through JCasC
+    image: ekzhang/bore
+    command: local 8080 --to bore.pub --local-host jenkins
+    depends_on:
+      - jenkins
+    networks:
+      - lfs261
+    #environment:
+      #- BORE_SECRET=<SECRET>
+      #- BORE_SERVER=<SERVER_IP>
+    #profiles:
+      #- tunnel
+
