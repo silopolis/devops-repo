@@ -1,5 +1,5 @@
 # Base image
-FROM jenkins/jenkins:2.492.3-lts-jdk21
+FROM jenkins/jenkins:lts-jdk21
 
 # Switch to root user for installations
 USER root
@@ -28,14 +28,19 @@ RUN echo \
 RUN apt-get update && apt-get install -y docker-ce-cli
 
 # Install docker-compose (keeping your existing method)
-RUN curl -L "https://github.com/docker/compose/releases/download/$(curl -fsSLI -o /dev/null -w %{url_effective} https://github.com/docker/compose/releases/latest | sed 's#.*tag/##g')/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && \
-    chmod +x /usr/local/bin/docker-compose && \
-    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+#RUN curl -L "https://github.com/docker/compose/releases/download/$(curl -fsSLI -o /dev/null -w %{url_effective} https://github.com/docker/compose/releases/latest | sed 's#.*tag/##g')/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && \
+    #chmod +x /usr/local/bin/docker-compose && \
+    #ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+RUN apt-get install -y docker-compose-plugin
 
 # Switch back to jenkins user
 USER jenkins
 
 # Install Jenkins plugins
-RUN jenkins-plugin-cli --plugins blueocean
+RUN jenkins-plugin-cli --plugins \
+        blueocean \
+        json-path-api \
+        locale \
+        saferestart \
+        configuration-as-code
 
-RUN jenkins-plugin-cli --plugins json-path-api:2.9.0-148.v22a_7ffe323ce
