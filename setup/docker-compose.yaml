@@ -1,62 +1,96 @@
 networks:
-  lfs261:
+  jenkins-net:
     driver: bridge
 
 volumes:
+  #tunnel-shared:
   jenkins-docker-certs:
   jenkins-data:
 
 services:
-  jenkins: 
-    image: jenkins/jenkins 
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - 8080:8080
-      - 50000:50000
-    environment:
-      - DOCKER_HOST=tcp://docker:2376
-      - DOCKER_CERT_PATH=/certs/client
-      - DOCKER_TLS_VERIFY=1
+  tunnel:
+    image: ekzhang/bore
+    #build:
+      #context: .
+      #dockerfile: bore.Dockerfile
     networks:
-      - lfs261
-    hostname: jenkins
-    restart: always
-    volumes:
-      - jenkins-data:/var/jenkins_home
-      - jenkins-docker-certs:/certs/client:ro
-    depends_on:
-      - docker
+      - jenkins-net
+    #volumes:
+      #- tunnel-shared:/var/run/bore
+    environment:
+      - NO_COLOR=1
+      #- BORE_LOCAL_HOST=jenkins
+      #- BORE_LOCAL_PORT=8080
+      #- BORE_SERVER=bore.pub
+      #- BORE_SERVER_PORT=50700
+      #- BORE_SECRET=<SECRET>
+    #entrypoint: ["/bin/sh","-c"]
+    #command: >
+      #bore local 8080 --to bore.pub --local-host jenkins 2>&1
+      #| tee /shared/bore.log
+      #| awk 'match($0,/remote_port=([0-9]+)/,m){
+          #port=m[1];
+          #print "REMOTE_PORT=" port > "/shared/remote_port";
+          #printf("jenkins:\n  location:\n    url: \"http://bore.pub:%s/\"\n", port) > "/shared/jenkins.yaml";
+          #fflush(); close("/shared/remote_port"); close("/shared/jenkins.yaml");
+          #} {print $0 > "/proc/1/fd/1"}'  # keep normal logs flowing
+    #command: local $BORE_LOCAL_PORT --local-host $BORE_LOCAL_HOST --to $BORE_SERVER --port $BORE_SERVER_PORT
+    command: local 8080 --local-host jenkins --to bore.pub --port 50700
+    #healthcheck:
+      #test: ["CMD-SHELL","[ -s /var/run/bore/remote_port ]"]
+      #interval: 2s
+      #retries: 60
+    restart: unless-stopped
+    #profiles:
+      #- tunnel
 
   docker:
     image: docker:dind
+    networks:
+      - jenkins-net
+    hostname: docker
     ports:
       - 2376:2376
       - 5000:5000
       - 5001:5001
-    environment:
-      - DOCKER_TLS_CERTDIR=/certs
-    networks:
-      - lfs261
-    privileged: true
-    hostname: docker
-    restart: always
     volumes:
       - jenkins-docker-certs:/certs/client
       - jenkins-data:/var/jenkins_home
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    privileged: true
+    healthcheck:
+      # Healthy when the Docker daemon is up
+      test: ["CMD-SHELL","docker info >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    restart: always
 
-  tunnel:
-    # TODO Automatically configure System>Jenkins Location>Jenkins URL through JCasC
-    image: ekzhang/bore
-    command: local 8080 --to bore.pub --local-host jenkins
+  jenkins: 
+    image: silopolis/jenkins 
+    build:
+      context: .
+      dockerfile: Dockerfile
     depends_on:
-      - jenkins
+      tunnel:
+        condition: service_started
+      docker:
+        condition: service_healthy
     networks:
-      - lfs261
-    #environment:
-      #- BORE_SECRET=<SECRET>
-      #- BORE_SERVER=<SERVER_IP>
-    #profiles:
-      #- tunnel
+      - jenkins-net
+    hostname: jenkins
+    ports:
+      - 8080:8080
+      - 50000:50000
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - jenkins-docker-certs:/certs/client:ro
+      #- tunnel-shared:/shared:ro
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
+      #- CASC_JENKINS_CONFIG=/shared/jenkins.yaml
+    restart: unless-stopped
 
